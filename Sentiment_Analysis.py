@@ -40,29 +40,26 @@ print(df[df['rating'] < 1])
 
 df['reviewText'] = df['reviewText'].str.lower()
 print(df.head())
+
+
 stop_words = stopwords.words('english')
-# removing special characters
-df['reviewText'] = df['reviewText'].apply(lambda x:re.sub('[^a-z A-Z 0-9]', ' ', x))
-# remove stop words
-df['reviewText'] = df['reviewText'].apply(lambda x:' '.join([word for word in x.split() if word not in stop_words]))
-# remove url
-df['reviewText']=df['reviewText'].apply(lambda x: re.sub(r'(http|https|ftp|ssh)://([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?', '' , str(x)))
-#remove html tags
-df['reviewText'] = df['reviewText'].apply(lambda x: BeautifulSoup(x, 'html.parser').get_text())
-# remove additional spaces
-df['reviewText']  = df['reviewText'].apply(lambda x: " ".join(x.split()))
-
-
-print(df.head())
-
-
 lematizer = WordNetLemmatizer()
-def lemmatize_words(text):
-    return " ".join([lematizer.lemmatize(word, pos='v') for word in text.split()])
-df['reviewText']=df['reviewText'].apply(lambda x:lemmatize_words(x))
 
+def preprocess_review(text):
+    if type(text) != str:
+        return ''
 
-print(df.head())
+    text = re.sub('[^a-z A-Z 0-9]', ' ', text)
+    text = ' '.join([word for word in text.split() if word not in stop_words])
+    text = re.sub(r'(http|https|ftp|ssh)://([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?', '' , str(text))
+    text = BeautifulSoup(text, 'html.parser').get_text()
+    text = ' '.join([lematizer.lemmatize(word)for word in text.split()])
+    text = ' '.join(text.split())
+    return text
+
+df['reviewText'] = df['reviewText'].apply(preprocess_review)
+print(df['reviewText'].head())
+print(df)
 
 
 
@@ -87,8 +84,8 @@ print(model.corpus_count)
 
 model.wv.similar_by_word('novel')
 
-def avg_word2vec(doc):
-    words = word_tokenize(doc)
+def avg_word2vec(text):
+    words = word_tokenize(text)
     word_vectors = [model.wv[word] for word in words if word in model.wv]
     return np.mean(word_vectors, axis=0) if word_vectors else np.zeros(model.wv.vector_size)
 
@@ -128,3 +125,13 @@ y_pred_tfidf=nb_model_bow.predict(X_test_tfidf)
 
 print("BOW accuracy: ",accuracy_score(y_test,y_pred_bow))
 print("TFIDF accuracy: ",accuracy_score(y_test,y_pred_tfidf))
+print("Word2Vec accuracy", accuracy_score(y_test, y_preds))
+
+
+def predict_sentiment(review_text):
+    preprocessed_data = preprocess_review(review_text)
+    vec = avg_word2vec(preprocessed_data)
+    predict = ml_model.predict([vec])
+    return 'Positive' if predict == 1 else 'Negative'
+result = predict_sentiment("I didn't expect this book to be soo good")
+print(result)
